@@ -2,14 +2,12 @@
   "manifest_version": 3,
   "name": "二维码识别器",
   "version": "1.0.0",
-  "description": "右键网页中的图片，识别其中的二维码，并自动把二维码内容/链接复制到剪贴板。纯本地解码，不上传任何数据。",
+  "description": "右键网页中的图片，识别其中的二维码，结果弹窗展示并可一键复制。纯本地解码，不上传任何数据。",
   "minimum_chrome_version": "109",
   "permissions": [
     "contextMenus",
     "scripting",
-    "activeTab",
-    "offscreen",
-    "clipboardWrite"
+    "activeTab"
   ],
   "host_permissions": ["<all_urls>"],
   "background": {

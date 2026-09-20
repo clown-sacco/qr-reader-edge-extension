@@ -1,11 +1,15 @@
 // 二维码识别器 - 内容脚本（按需注入，不常驻）
-// 职责：把图片变成 ImageData 交给 jsQR 解码；页面内复制兜底；弹出结果气泡
+// 职责：把图片变成 ImageData 交给 jsQR 解码；弹出结果气泡（用户手动复制/打开）
 
 (() => {
   if (window.__qrReaderInjected) return;
   window.__qrReaderInjected = true;
 
   const MAX_SIDE = 2400; // 解码前最长边上限，超大图等比缩小，避免卡顿
+
+  // 结果气泡的入出场动画：'slide' | 'fade-up' | 'drop' | 'pop'
+  // 备选样式可在 test/toast-preview.html 里预览对比
+  const ANIM = 'drop';
 
   // ---------- 图片 -> ImageData ----------
 
@@ -83,12 +87,12 @@
     return { ok: false, reason: sawPixels ? 'no_code' : 'read_fail' };
   }
 
-  // ---------- 页面内复制（离屏文档失败时的兜底） ----------
+  // ---------- 复制（气泡按钮点击触发，有用户手势，clipboard API 可直接用） ----------
 
-  async function copyInPage(text) {
+  async function copyText(text) {
     try {
       await navigator.clipboard.writeText(text);
-      return { ok: true };
+      return true;
     } catch {}
     try {
       const ta = document.createElement('textarea');
@@ -99,9 +103,9 @@
       ta.select();
       const ok = document.execCommand('copy');
       ta.remove();
-      return { ok };
+      return ok;
     } catch {
-      return { ok: false };
+      return false;
     }
   }
 
@@ -114,8 +118,8 @@
 
   function showToast(kind, text) {
     if (toastHost) {
-      toastHost.remove();
       clearTimeout(toastTimer);
+      toastHost.remove();
       toastHost = null;
     }
 
@@ -131,19 +135,38 @@
         max-width:min(420px,calc(100vw - 48px));box-sizing:border-box;cursor:pointer;}
       .title{font-weight:600;color:#fff;}
       .ok{color:#81c995;}
-      .warn{color:#fdd663;}
       .err{color:#f28b82;}
       .content{margin-top:6px;color:#9aa0a6;word-break:break-all;max-height:96px;overflow:auto;cursor:text;}
-      a{color:#8ab4f8;text-decoration:none;}
-      a:hover{text-decoration:underline;}
-      .btn{display:inline-block;margin-top:8px;padding:3px 12px;border:1px solid #5f6368;border-radius:999px;
-        color:#8ab4f8;background:transparent;cursor:pointer;font-size:12px;}
-      .btn:hover{background:#303134;}
+      .actions{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;}
+      a.btn,button.btn{display:inline-block;padding:3px 12px;border:1px solid #5f6368;border-radius:999px;
+        color:#8ab4f8;background:transparent;cursor:pointer;font-size:12px;text-decoration:none;}
+      a.btn:hover,button.btn:hover{background:#303134;}
+      button.btn:disabled{color:#81c995;border-color:#81c995;cursor:default;}
+
+      .card[data-anim="slide"]{animation:toast-slide .3s cubic-bezier(.22,.9,.3,1) both;}
+      .card[data-anim="fade-up"]{animation:toast-fade-up .3s cubic-bezier(.22,.9,.3,1) both;}
+      .card[data-anim="drop"]{animation:toast-drop .55s cubic-bezier(.2,.8,.3,1) both;}
+      .card[data-anim="pop"]{animation:toast-pop .38s cubic-bezier(.2,.8,.3,1) both;}
+      .card.leaving{animation-direction:reverse;}
+      @keyframes toast-slide{from{transform:translateX(calc(100% + 32px));opacity:0;}to{transform:none;opacity:1;}}
+      @keyframes toast-fade-up{from{opacity:0;transform:translateY(-14px) scale(.97);}to{opacity:1;transform:none;}}
+      @keyframes toast-drop{
+        0%{transform:translateY(-160%);opacity:0;}
+        55%{transform:translateY(6%);opacity:1;}
+        75%{transform:translateY(-2%);}
+        100%{transform:translateY(0);}
+      }
+      @keyframes toast-pop{
+        0%{transform:scale(.55);opacity:0;}
+        70%{transform:scale(1.05);opacity:1;}
+        100%{transform:scale(1);}
+      }
     `;
     root.append(style);
 
     const card = document.createElement('div');
     card.className = 'card';
+    card.dataset.anim = ANIM;
 
     const title = document.createElement('div');
     title.className = 'title';
@@ -152,12 +175,7 @@
       const ok = document.createElement('span');
       ok.className = 'ok';
       ok.textContent = '\u2713 ';
-      title.append(ok, document.createTextNode(isUrl(text) ? '已复制二维码链接' : '已复制二维码内容'));
-    } else if (kind === 'copy-fail') {
-      const warn = document.createElement('span');
-      warn.className = 'warn';
-      warn.textContent = '\u26a0 ';
-      title.append(warn, document.createTextNode('识别成功，但复制失败'));
+      title.append(ok, document.createTextNode(isUrl(text) ? '识别到二维码链接' : '识别到二维码内容'));
     } else {
       const err = document.createElement('span');
       err.className = 'err';
@@ -166,45 +184,50 @@
     }
     card.append(title);
 
-    if (kind !== 'error' && text) {
+    if (kind === 'success' && text) {
       const content = document.createElement('div');
       content.className = 'content';
       content.textContent = text;
       card.append(content);
 
-      if (kind === 'success' && isUrl(text)) {
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'btn';
+      copyBtn.type = 'button';
+      copyBtn.textContent = '复制';
+      copyBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (copyBtn.disabled) return;
+        if (await copyText(text)) {
+          copyBtn.textContent = '已复制 \u2713';
+          copyBtn.disabled = true;
+        }
+      });
+      actions.append(copyBtn);
+
+      if (isUrl(text)) {
         const open = document.createElement('a');
+        open.className = 'btn';
         open.href = text;
         open.target = '_blank';
         open.rel = 'noopener noreferrer';
         open.textContent = '打开链接';
-        open.style.display = 'inline-block';
-        open.style.marginTop = '8px';
-        card.append(document.createElement('br'), open);
+        actions.append(open);
       }
-
-      if (kind === 'copy-fail') {
-        const btn = document.createElement('button');
-        btn.className = 'btn';
-        btn.textContent = '重新复制';
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const r = await copyInPage(text);
-          if (r.ok) {
-            btn.textContent = '已复制 \u2713';
-            btn.disabled = true;
-          }
-        });
-        card.append(btn);
-      }
+      card.append(actions);
     }
 
     root.append(card);
 
     const dismiss = () => {
       clearTimeout(toastTimer);
-      host.remove();
-      if (toastHost === host) toastHost = null;
+      card.addEventListener('animationend', () => {
+        host.remove();
+        if (toastHost === host) toastHost = null;
+      }, { once: true });
+      card.classList.add('leaving'); // 反向重放入场动画作为退场
     };
     card.addEventListener('click', (e) => {
       if (e.target.closest('a,button')) return;
@@ -213,7 +236,7 @@
 
     document.documentElement.appendChild(host);
     toastHost = host;
-    toastTimer = setTimeout(dismiss, kind === 'success' ? 6000 : 8000);
+    toastTimer = setTimeout(dismiss, kind === 'success' ? 8000 : 6000);
   }
 
   // ---------- 消息入口 ----------
@@ -223,9 +246,6 @@
       case 'QR_DECODE':
         handleDecode(msg).then(sendResponse);
         return true; // 异步回复
-      case 'QR_COPY_IN_PAGE':
-        copyInPage(msg.text).then(sendResponse);
-        return true;
       case 'QR_TOAST':
         showToast(msg.kind, msg.text);
         sendResponse({ ok: true });

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>二维码识别器 - 结果气泡动画预览</title>
+<style>
+  :root { color-scheme: light; }
+  body {
+    font: 14px/1.7 -apple-system, "Segoe UI", Roboto, "Microsoft YaHei", sans-serif;
+    background: #f5f6f8; color: #202124; margin: 0; padding: 40px 24px 80px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #5f6368; margin: 0 0 32px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 980px; }
+  .opt {
+    background: #fff; border: 1px solid #dadce0; border-radius: 14px;
+    padding: 20px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .opt h2 { font-size: 15px; margin: 0; display: flex; align-items: baseline; gap: 10px; }
+  .opt h2 code {
+    font-size: 12px; color: #5f6368; background: #f1f3f4; padding: 1px 8px; border-radius: 6px;
+  }
+  .opt p { margin: 0; color: #5f6368; font-size: 13px; }
+  .stage { min-height: 92px; display: flex; align-items: center; justify-content: center; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  button.play {
+    border: 0; background: #1a73e8; color: #fff; border-radius: 999px;
+    padding: 6px 18px; font-size: 13px; cursor: pointer;
+  }
+  button.play:hover { background: #1765cc; }
+  .tip { color: #5f6368; font-size: 12px; }
+
+  /* ===== 以下与扩展 content.js 中气泡样式完全一致 ===== */
+  .card{font:13px/1.5 -apple-system,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif;color:#e8eaed;
+    background:#202124;border:1px solid #3c4043;border-radius:10px;
+    box-shadow:0 8px 24px rgba(0,0,0,.35);padding:12px 14px;
+    max-width:min(420px,calc(100vw - 48px));box-sizing:border-box;cursor:pointer;}
+  .title{font-weight:600;color:#fff;}
+  .ok{color:#81c995;}
+  .content{margin-top:6px;color:#9aa0a6;word-break:break-all;max-height:96px;overflow:auto;cursor:text;}
+  .actions{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;}
+  a.btn,button.btn{display:inline-block;padding:3px 12px;border:1px solid #5f6368;border-radius:999px;
+    color:#8ab4f8;background:transparent;cursor:pointer;font-size:12px;text-decoration:none;}
+  a.btn:hover,button.btn:hover{background:#303134;}
+
+  .card[data-anim="slide"]{animation:toast-slide .3s cubic-bezier(.22,.9,.3,1) both;}
+  .card[data-anim="fade-up"]{animation:toast-fade-up .3s cubic-bezier(.22,.9,.3,1) both;}
+  .card[data-anim="drop"]{animation:toast-drop .55s cubic-bezier(.2,.8,.3,1) both;}
+  .card[data-anim="pop"]{animation:toast-pop .38s cubic-bezier(.2,.8,.3,1) both;}
+  .card.leaving{animation-direction:reverse;}
+  @keyframes toast-slide{from{transform:translateX(calc(100% + 32px));opacity:0;}to{transform:none;opacity:1;}}
+  @keyframes toast-fade-up{from{opacity:0;transform:translateY(-14px) scale(.97);}to{opacity:1;transform:none;}}
+  @keyframes toast-drop{
+    0%{transform:translateY(-160%);opacity:0;}
+    55%{transform:translateY(6%);opacity:1;}
+    75%{transform:translateY(-2%);}
+    100%{transform:translateY(0);}
+  }
+  @keyframes toast-pop{
+    0%{transform:scale(.55);opacity:0;}
+    70%{transform:scale(1.05);opacity:1;}
+    100%{transform:scale(1);}
+  }
+
+  /* 右上角真实试播容器 */
+  #real { position: fixed; top: 20px; right: 20px; z-index: 999; }
+  #real:empty { display: none; }
+</style>
+</head>
+<body>
+  <h1>结果气泡动画预览</h1>
+  <p class="sub">下面每个卡片就是扩展实际弹出的气泡，正在循环播放对应动画；点「在右上角试播」看真实位置效果（4 秒后自动退出）。「复制」按钮可用。</p>
+
+  <div class="grid">
+    <div class="opt">
+      <h2>① 滑入 <code>slide</code></h2>
+      <p>从右侧屏幕外轻快滑入，结束时反向滑出。经典的通知样式，方向感明确。</p>
+      <div class="stage"></div>
+      <div class="row"><button class="play" data-anim="slide">在右上角试播</button></div>
+    </div>
+
+    <div class="opt">
+      <h2>② 淡入上浮 <code>fade-up</code></h2>
+      <p>轻微缩放 + 向上浮起淡入，动作幅度最小，柔和低调不抢注意力。</p>
+      <div class="stage"></div>
+      <div class="row"><button class="play" data-anim="fade-up">在右上角试播</button></div>
+    </div>
+
+    <div class="opt">
+      <h2>③ 弹跳下落 <code>drop</code></h2>
+      <p>从上方落下并带回弹落定，类似 macOS 系统通知的物理感，活泼一些。</p>
+      <div class="stage"></div>
+      <div class="row"><button class="play" data-anim="drop">在右上角试播</button></div>
+    </div>
+
+    <div class="opt">
+      <h2>④ 弹缩出现 <code>pop</code></h2>
+      <p>原地从小放大并轻微过冲回弹，中心感强，最醒目轻快。</p>
+      <div class="stage"></div>
+      <div class="row"><button class="play" data-anim="pop">在右上角试播</button></div>
+    </div>
+  </div>
+
+  <!-- 右上角真实试播的承载容器 -->
+  <div id="real"></div>
+
+  <script>
+    const SAMPLE_URL = 'https://example.com/qr-demo-12345';
+
+    // 构建一张与扩展一致的气泡卡片
+    function buildCard(anim) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.anim = anim;
+      const title = document.createElement('div');
+      title.className = 'title';
+      const ok = document.createElement('span');
+      ok.className = 'ok';
+      ok.textContent = '\u2713 ';
+      title.append(ok, document.createTextNode('识别到二维码链接'));
+      const content = document.createElement('div');
+      content.className = 'content';
+      content.textContent = SAMPLE_URL;
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'btn';
+      copyBtn.type = 'button';
+      copyBtn.textContent = '复制';
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(SAMPLE_URL);
+          copyBtn.textContent = '已复制 \u2713';
+          copyBtn.disabled = true;
+          copyBtn.style.color = '#81c995';
+          copyBtn.style.borderColor = '#81c995';
+        } catch { /* 预览页无手势时忽略 */ }
+      });
+      const open = document.createElement('a');
+      open.className = 'btn';
+      open.href = SAMPLE_URL;
+      open.target = '_blank';
+      open.rel = 'noopener noreferrer';
+      open.textContent = '打开链接';
+      actions.append(copyBtn, open);
+      card.append(title, content, actions);
+      return card;
+    }
+
+    // 每个选项里的循环演示：间隔重播同一段入场动画
+    document.querySelectorAll('.opt').forEach((opt) => {
+      const anim = opt.querySelector('button.play').dataset.anim;
+      const stage = opt.querySelector('.stage');
+      const card = buildCard(anim);
+      stage.append(card);
+      setInterval(() => {
+        card.style.animation = 'none';
+        void card.offsetWidth; // 强制重排以重启动画
+        card.style.animation = '';
+      }, 2400);
+    });
+
+    // 右上角真实试播：入场 + 4 秒后反向退出
+    document.querySelectorAll('button.play').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const holder = document.getElementById('real');
+        holder.innerHTML = '';
+        const card = buildCard(btn.dataset.anim);
+        holder.append(card);
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('a,button')) return;
+          leave();
+        });
+        const timer = setTimeout(leave, 4000);
+        function leave() {
+          clearTimeout(timer);
+          card.addEventListener('animationend', () => (holder.innerHTML = ''), { once: true });
+          card.classList.add('leaving');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

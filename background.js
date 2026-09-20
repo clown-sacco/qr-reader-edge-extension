@@ -1,6 +1,6 @@
 // 二维码识别器 - 后台 Service Worker
 // 流程：右键菜单点击 -> 注入解码脚本 -> 后台抓取图片 -> 内容脚本用 jsQR 解码
-//       -> 离屏文档写入剪贴板 -> 内容脚本弹出结果提示
+//       -> 内容脚本弹出结果气泡（展示内容，手动复制/打开）
 
 const MENU_ID = 'qr-reader-decode';
 
@@ -59,35 +59,16 @@ async function handleMenuClick(info, tab) {
     console.warn('[QR] 内容脚本无响应:', err);
   }
 
-  if (!result?.ok) {
+  // 4) 弹出结果气泡（复制由用户在气泡里手动完成）
+  if (result?.ok) {
+    await sendToast(tabId, info.frameId, { kind: 'success', text: result.text });
+  } else {
     const text =
       result?.reason === 'read_fail'
         ? '无法读取该图片（可能受防盗链或跨域限制）'
         : '未在图片中识别到二维码';
     await sendToast(tabId, info.frameId, { kind: 'error', text });
-    return;
   }
-
-  // 4) 复制到剪贴板：优先离屏文档，失败回退到页面内复制
-  let copied = await copyViaOffscreen(result.text);
-  if (!copied) {
-    try {
-      const r = await chrome.tabs.sendMessage(
-        tabId,
-        { type: 'QR_COPY_IN_PAGE', text: result.text },
-        { frameId: info.frameId }
-      );
-      copied = !!r?.ok;
-    } catch {}
-  }
-
-  await sendToast(
-    tabId,
-    info.frameId,
-    copied
-      ? { kind: 'success', text: result.text }
-      : { kind: 'copy-fail', text: result.text }
-  );
 }
 
 async function sendToast(tabId, frameId, payload) {
@@ -110,43 +91,4 @@ async function fetchAsDataUrl(url) {
   }
   const mime = blob.type || 'image/png';
   return `data:${mime};base64,${btoa(binary)}`;
-}
-
-// ---------- 剪贴板：离屏文档（MV3 Service Worker 无 DOM，不能直接写剪贴板） ----------
-
-let offscreenCreating = null;
-
-async function copyViaOffscreen(text) {
-  try {
-    if (typeof chrome.offscreen.hasDocument === 'function') {
-      if (!(await chrome.offscreen.hasDocument())) await createOffscreen();
-    } else {
-      await createOffscreen();
-    }
-    const res = await chrome.runtime.sendMessage({ type: 'QR_OFFSCREEN_COPY', text });
-    return !!res?.ok;
-  } catch (err) {
-    console.warn('[QR] offscreen 复制失败:', err);
-    return false;
-  }
-}
-
-async function createOffscreen() {
-  if (offscreenCreating) {
-    await offscreenCreating;
-    return;
-  }
-  offscreenCreating = chrome.offscreen.createDocument({
-    url: 'offscreen.html',
-    reasons: [chrome.offscreen.Reason.CLIPBOARD],
-    justification: '把识别出的二维码内容写入剪贴板',
-  });
-  try {
-    await offscreenCreating;
-  } catch (err) {
-    // 文档已存在时会报 "Only a single offscreen document..."，属正常
-    if (!/single offscreen/i.test(String(err?.message ?? err))) throw err;
-  } finally {
-    offscreenCreating = null;
-  }
 }
