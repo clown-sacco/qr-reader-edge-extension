@@ -200,10 +200,7 @@
       copyBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (copyBtn.disabled) return;
-        if (await copyText(text)) {
-          copyBtn.textContent = '已复制 \u2713';
-          copyBtn.disabled = true;
-        }
+        if (await copyText(text)) dismiss(); // 复制成功即关闭；失败保留气泡供重试
       });
       actions.append(copyBtn);
 
@@ -214,6 +211,7 @@
         open.target = '_blank';
         open.rel = 'noopener noreferrer';
         open.textContent = '打开链接';
+        open.addEventListener('click', () => dismiss());
         actions.append(open);
       }
       card.append(actions);
@@ -236,7 +234,7 @@
 
     document.documentElement.appendChild(host);
     toastHost = host;
-    toastTimer = setTimeout(dismiss, kind === 'success' ? 8000 : 6000);
+    toastTimer = setTimeout(dismiss, 5000);
   }
 
   // ---------- 消息入口 ----------

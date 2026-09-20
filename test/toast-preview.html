@@ -69,7 +69,7 @@
 </head>
 <body>
   <h1>结果气泡动画预览</h1>
-  <p class="sub">下面每个卡片就是扩展实际弹出的气泡，正在循环播放对应动画；点「在右上角试播」看真实位置效果（4 秒后自动退出）。「复制」按钮可用。</p>
+  <p class="sub">下面每个卡片就是扩展实际弹出的气泡，正在循环播放对应动画；点「在右上角试播」看真实效果（5 秒后自动退出，复制成功或点「打开链接」也会关闭）。与扩展行为一致。</p>
 
   <div class="grid">
     <div class="opt">
@@ -87,7 +87,7 @@
     </div>
 
     <div class="opt">
-      <h2>③ 弹跳下落 <code>drop</code></h2>
+      <h2>③ 弹跳下落 <code>drop</code>（当前使用）</h2>
       <p>从上方落下并带回弹落定，类似 macOS 系统通知的物理感，活泼一些。</p>
       <div class="stage"></div>
       <div class="row"><button class="play" data-anim="drop">在右上角试播</button></div>
@@ -107,52 +107,69 @@
   <script>
     const SAMPLE_URL = 'https://example.com/qr-demo-12345';
 
-    // 构建一张与扩展一致的气泡卡片
-    function buildCard(anim) {
+    // 构建一张与扩展一致的气泡卡片。
+    // onAction：模拟扩展中「复制成功/点击打开链接即关闭」的行为；
+    // 页内循环演示卡片不传（就地显示复制成功反馈，不消失）。
+    function buildCard(anim, onAction) {
       const card = document.createElement('div');
       card.className = 'card';
       card.dataset.anim = anim;
+
       const title = document.createElement('div');
       title.className = 'title';
       const ok = document.createElement('span');
       ok.className = 'ok';
       ok.textContent = '\u2713 ';
       title.append(ok, document.createTextNode('识别到二维码链接'));
+      card.append(title);
+
       const content = document.createElement('div');
       content.className = 'content';
       content.textContent = SAMPLE_URL;
+      card.append(content);
+
       const actions = document.createElement('div');
       actions.className = 'actions';
+
       const copyBtn = document.createElement('button');
       copyBtn.className = 'btn';
       copyBtn.type = 'button';
       copyBtn.textContent = '复制';
       copyBtn.addEventListener('click', async () => {
+        if (copyBtn.disabled) return;
         try {
           await navigator.clipboard.writeText(SAMPLE_URL);
+        } catch {
+          return; // 失败保留气泡供重试（与扩展一致）
+        }
+        if (onAction) onAction();
+        else {
           copyBtn.textContent = '已复制 \u2713';
           copyBtn.disabled = true;
           copyBtn.style.color = '#81c995';
           copyBtn.style.borderColor = '#81c995';
-        } catch { /* 预览页无手势时忽略 */ }
+        }
       });
+      actions.append(copyBtn);
+
       const open = document.createElement('a');
       open.className = 'btn';
       open.href = SAMPLE_URL;
       open.target = '_blank';
       open.rel = 'noopener noreferrer';
       open.textContent = '打开链接';
-      actions.append(copyBtn, open);
-      card.append(title, content, actions);
+      if (onAction) open.addEventListener('click', onAction);
+      actions.append(open);
+
+      card.append(actions);
       return card;
     }
 
     // 每个选项里的循环演示：间隔重播同一段入场动画
     document.querySelectorAll('.opt').forEach((opt) => {
       const anim = opt.querySelector('button.play').dataset.anim;
-      const stage = opt.querySelector('.stage');
       const card = buildCard(anim);
-      stage.append(card);
+      opt.querySelector('.stage').append(card);
       setInterval(() => {
         card.style.animation = 'none';
         void card.offsetWidth; // 强制重排以重启动画
@@ -160,23 +177,26 @@
       }, 2400);
     });
 
-    // 右上角真实试播：入场 + 4 秒后反向退出
+    // 右上角真实试播：入场 + 5 秒后反向退出，复制成功/打开链接即退出
     document.querySelectorAll('button.play').forEach((btn) => {
       btn.addEventListener('click', () => {
         const holder = document.getElementById('real');
         holder.innerHTML = '';
-        const card = buildCard(btn.dataset.anim);
+        let left = false;
+        const leave = () => {
+          if (left) return;
+          left = true;
+          clearTimeout(timer);
+          card.addEventListener('animationend', () => (holder.innerHTML = ''), { once: true });
+          card.classList.add('leaving');
+        };
+        const card = buildCard(btn.dataset.anim, leave);
         holder.append(card);
         card.addEventListener('click', (e) => {
           if (e.target.closest('a,button')) return;
           leave();
         });
-        const timer = setTimeout(leave, 4000);
-        function leave() {
-          clearTimeout(timer);
-          card.addEventListener('animationend', () => (holder.innerHTML = ''), { once: true });
-          card.classList.add('leaving');
-        }
+        const timer = setTimeout(leave, 5000);
       });
     });
   </script>
